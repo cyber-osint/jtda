@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JStack Thread Dump Analyzer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .upload-section {
+            padding: 40px;
+            text-align: center;
+        }
+
+        .drop-zone {
+            border: 3px dashed #667eea;
+            border-radius: 10px;
+            padding: 60px 40px;
+            margin: 20px 0;
+            background: #f8f9ff;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .drop-zone:hover,
+        .drop-zone.dragover {
+            border-color: #4f46e5;
+            background: #eef2ff;
+            transform: translateY(-2px);
+        }
+
+        .drop-zone-icon {
+            font-size: 4em;
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+
+        .drop-zone-text {
+            font-size: 1.2em;
+            color: #555;
+            margin-bottom: 15px;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .upload-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .upload-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .analysis-section {
+            display: none;
+            padding: 40px;
+        }
+
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid #e5e7eb;
+            margin-bottom: 30px;
+        }
+
+        .tab {
+            padding: 15px 25px;
+            background: none;
+            border: none;
+            font-size: 1em;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+            font-weight: 600;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .summary-card {
+            background: #f8f9ff;
+            border-radius: 10px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+        }
+
+        .summary-title {
+            font-size: 1.3em;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 15px;
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-item {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-label {
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .thread-list {
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .thread-item {
+            border-bottom: 1px solid #e5e7eb;
+            padding: 20px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .thread-item:hover {
+            background: #f8f9ff;
+        }
+
+        .thread-item:last-child {
+            border-bottom: none;
+        }
+
+        .thread-name {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+
+        .thread-state {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: 500;
+            margin-bottom: 10px;
+        }
+
+        .state-RUNNABLE {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .state-BLOCKED {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .state-WAITING {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .state-TIMED_WAITING {
+            background: #e0e7ff;
+            color: #3730a3;
+        }
+
+        .thread-details {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .stack-trace {
+            background: #1f2937;
+            color: #e5e7eb;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.8em;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 10px;
+            display: none;
+        }
+
+        .deadlock-warning {
+            background: #fee2e2;
+            border: 1px solid #fecaca;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .deadlock-title {
+            color: #991b1b;
+            font-weight: 600;
+            font-size: 1.1em;
+            margin-bottom: 10px;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .spinner {
+            border: 4px solid #e5e7eb;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error-message {
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧵 JStack Thread Dump Analyzer</h1>
+            <p>Java 스레드 덤프를 업로드하여 성능 문제, 데드락, 블로킹 상태를 분석하세요</p>
+        </div>
+
+        <div class="upload-section" id="uploadSection">
+            <div class="drop-zone" id="dropZone">
+                <div class="drop-zone-icon">📁</div>
+                <div class="drop-zone-text">Thread Dump 파일을 드래그앤드롭하거나 클릭하여 업로드하세요</div>
+                <div style="color: #888; font-size: 0.9em; margin-bottom: 20px;">
+                    지원 형식: .txt, .log, .dump (jstack, kill -3, jcmd 출력)
+                </div>
+                <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
+                    파일 선택
+                </button>
+            </div>
+            <input type="file" id="fileInput" class="file-input" accept=".txt,.log,.dump">
+            <div class="error-message" id="errorMessage"></div>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Thread Dump를 분석 중입니다...</p>
+        </div>
+
+        <div class="analysis-section" id="analysisSection">
+            <div class="tabs">
+                <button class="tab active" onclick="showTab('summary')">📊 요약</button>
+                <button class="tab" onclick="showTab('threads')">🧵 스레드 목록</button>
+                <button class="tab" onclick="showTab('deadlocks')">⚠️ 데드락</button>
+                <button class="tab" onclick="showTab('blocking')">🚧 블로킹 분석</button>
+            </div>
+
+            <div id="summary" class="tab-content active">
+                <div class="summary-card">
+                    <div class="summary-title">Thread Dump 분석 결과</div>
+                    <div class="stat-grid" id="statGrid">
+                        <!-- 통계 정보가 여기에 표시됩니다 -->
+                    </div>
+                </div>
+                <div id="jvmInfo"></div>
+            </div>
+
+            <div id="threads" class="tab-content">
+                <div class="summary-card">
+                    <div class="summary-title">전체 스레드 목록</div>
+                    <div class="thread-list" id="threadList">
+                        <!-- 스레드 목록이 여기에 표시됩니다 -->
+                    </div>
+                </div>
+            </div>
+
+            <div id="deadlocks" class="tab-content">
+                <div class="summary-card">
+                    <div class="summary-title">데드락 분석</div>
+                    <div id="deadlockResults">
+                        <!-- 데드락 분석 결과가 여기에 표시됩니다 -->
+                    </div>
+                </div>
+            </div>
+
+            <div id="blocking" class="tab-content">
+                <div class="summary-card">
+                    <div class="summary-title">블로킹 분석</div>
+                    <div id="blockingResults">
+                        <!-- 블로킹 분석 결과가 여기에 표시됩니다 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class ThreadDumpAnalyzer {
+            constructor() {
+                this.threadDump = null;
+                this.threads = [];
+                this.deadlocks = [];
+                this.blockingAnalysis = {};
+                this.setupEventListeners();
+            }
+
+            setupEventListeners() {
+                const dropZone = document.getElementById('dropZone');
+                const fileInput = document.getElementById('fileInput');
+
+                // 드래그앤드롭 이벤트
+                dropZone.addEventListener('click', () => fileInput.click());
+                dropZone.addEventListener('dragover', this.handleDragOver.bind(this));
+                dropZone.addEventListener('dragleave', this.handleDragLeave.bind(this));
+                dropZone.addEventListener('drop', this.handleDrop.bind(this));
+
+                // 파일 선택 이벤트
+                fileInput.addEventListener('change', this.handleFileSelect.bind(this));
+            }
+
+            handleDragOver(e) {
+                e.preventDefault();
+                document.getElementById('dropZone').classList.add('dragover');
+            }
+
+            handleDragLeave(e) {
+                e.preventDefault();
+                document.getElementById('dropZone').classList.remove('dragover');
+            }
+
+            handleDrop(e) {
+                e.preventDefault();
+                document.getElementById('dropZone').classList.remove('dragover');
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    this.processFile(files[0]);
+                }
+            }
+
+            handleFileSelect(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    this.processFile(file);
+                }
+            }
+
+            async processFile(file) {
+                try {
+                    this.showLoading();
+                    this.hideError();
+
+                    const content = await this.readFile(file);
+                    await this.analyzeThreadDump(content);
+                    this.showAnalysis();
+
+                } catch (error) {
+                    this.showError('파일 처리 중 오류가 발생했습니다: ' + error.message);
+                    this.hideLoading();
+                }
+            }
+
+            readFile(file) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = e => resolve(e.target.result);
+                    reader.onerror = () => reject(new Error('파일을 읽을 수 없습니다.'));
+                    reader.readAsText(file, 'UTF-8');
+                });
+            }
+
+            async analyzeThreadDump(content) {
+                this.threadDump = content;
+                this.threads = this.parseThreads(content);
+                this.deadlocks = this.detectDeadlocks(content);
+                this.blockingAnalysis = this.analyzeBlocking(this.threads);
+                
+                // 분석 완료 후 UI 업데이트
+                this.updateSummary();
+                this.updateThreadList();
+                this.updateDeadlockAnalysis();
+                this.updateBlockingAnalysis();
+            }
+
+            parseThreads(content) {
+                const threads = [];
+                const threadBlocks = content.split(/\n\n+/);
+                
+                for (const block of threadBlocks) {
+                    const lines = block.trim().split('\n');
+                    if (lines.length < 2) continue;
+
+                    const threadLine = lines[0];
+                    if (!threadLine.includes('"') || !threadLine.includes('tid=')) continue;
+
+                    const thread = this.parseThreadInfo(lines);
+                    if (thread) {
+                        threads.push(thread);
+                    }
+                }
+
+                return threads;
+            }
+
+            parseThreadInfo(lines) {
+                const threadLine = lines[0];
+                const stateLine = lines.find(line => line.includes('java.lang.Thread.State:'));
+                
+                if (!stateLine) return null;
+
+                // 스레드 이름 추출
+                const nameMatch = threadLine.match(/"([^"]+)"/);
+                const name = nameMatch ? nameMatch[1] : 'Unknown';
+
+                // 스레드 상태 추출
+                const stateMatch = stateLine.match(/java\.lang\.Thread\.State:\s*(\w+)/);
+                const state = stateMatch ? stateMatch[1] : 'UNKNOWN';
+
+                // 우선순위 추출
+                const prioMatch = threadLine.match(/prio=(\d+)/);
+                const priority = prioMatch ? parseInt(prioMatch[1]) : 0;
+
+                // 스레드 ID 추출
+                const tidMatch = threadLine.match(/tid=(0x[a-fA-F0-9]+)/);
+                const tid = tidMatch ? tidMatch[1] : '';
+
+                // 네이티브 ID 추출
+                const nidMatch = threadLine.match(/nid=(0x[a-fA-F0-9]+)/);
+                const nid = nidMatch ? nidMatch[1] : '';
+
+                // 스택 트레이스 추출
+                const stackTrace = lines.slice(1).filter(line => 
+                    line.trim().startsWith('at ') || 
+                    line.trim().startsWith('- ') ||
+                    line.includes('java.lang.Thread.State:')
+                ).join('\n');
+
+                return {
+                    name,
+                    state,
+                    priority,
+                    tid,
+                    nid,
+                    stackTrace,
+                    isDaemon: threadLine.includes('daemon'),
+                    fullInfo: lines.join('\n')
+                };
+            }
+
+            detectDeadlocks(content) {
+                const deadlocks = [];
+                const deadlockSection = content.match(/Found Java-level deadlock:([\s\S]*?)(?=\n\n|\nJNI|$)/);
+                
+                if (deadlockSection) {
+                    const deadlockInfo = deadlockSection[1];
+                    const threadNames = [...deadlockInfo.matchAll(/"([^"]+)":/g)].map(match => match[1]);
+                    
+                    if (threadNames.length > 0) {
+                        deadlocks.push({
+                            type: 'Java-level deadlock',
+                            threads: threadNames,
+                            description: deadlockInfo.trim()
+                        });
+                    }
+                }
+
+                return deadlocks;
+            }
+
+            analyzeBlocking(threads) {
+                const blockedThreads = threads.filter(t => t.state === 'BLOCKED');
+                const waitingThreads = threads.filter(t => t.state === 'WAITING' || t.state === 'TIMED_WAITING');
+                
+                const lockContention = this.analyzeLockContention(threads);
+                
+                return {
+                    blockedCount: blockedThreads.length,
+                    waitingCount: waitingThreads.length,
+                    blockedThreads,
+                    waitingThreads,
+                    lockContention
+                };
+            }
+
+            analyzeLockContention(threads) {
+                const locks = {};
+                
+                threads.forEach(thread => {
+                    const lockMatches = thread.stackTrace.match(/- locked <(0x[a-fA-F0-9]+)>/g);
+                    const waitingMatches = thread.stackTrace.match(/- waiting to lock <(0x[a-fA-F0-9]+)>/g);
+                    
+                    if (lockMatches) {
+                        lockMatches.forEach(match => {
+                            const lockId = match.match(/<(0x[a-fA-F0-9]+)>/)[1];
+                            if (!locks[lockId]) locks[lockId] = { holders: [], waiters: [] };
+                            locks[lockId].holders.push(thread.name);
+                        });
+                    }
+                    
+                    if (waitingMatches) {
+                        waitingMatches.forEach(match => {
+                            const lockId = match.match(/<(0x[a-fA-F0-9]+)>/)[1];
+                            if (!locks[lockId]) locks[lockId] = { holders: [], waiters: [] };
+                            locks[lockId].waiters.push(thread.name);
+                        });
+                    }
+                });
+
+                return locks;
+            }
+
+            updateSummary() {
+                const stats = this.calculateStats();
+                const statGrid = document.getElementById('statGrid');
+                
+                statGrid.innerHTML = `
+                    <div class="stat-item">
+                        <div class="stat-number">${stats.totalThreads}</div>
+                        <div class="stat-label">총 스레드</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">${stats.runnableThreads}</div>
+                        <div class="stat-label">실행 중</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">${stats.blockedThreads}</div>
+                        <div class="stat-label">블로킹됨</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">${stats.waitingThreads}</div>
+                        <div class="stat-label">대기 중</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">${this.deadlocks.length}</div>
+                        <div class="stat-label">데드락</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">${stats.daemonThreads}</div>
+                        <div class="stat-label">데몬 스레드</div>
+                    </div>
+                `;
+
+                // JVM 정보 표시
+                const jvmInfo = this.extractJVMInfo();
+                document.getElementById('jvmInfo').innerHTML = `
+                    <div class="summary-card">
+                        <div class="summary-title">JVM 정보</div>
+                        <div style="color: #666; line-height: 1.6;">
+                            ${jvmInfo}
+                        </div>
+                    </div>
+                `;
+            }
+
+            calculateStats() {
+                return {
+                    totalThreads: this.threads.length,
+                    runnableThreads: this.threads.filter(t => t.state === 'RUNNABLE').length,
+                    blockedThreads: this.threads.filter(t => t.state === 'BLOCKED').length,
+                    waitingThreads: this.threads.filter(t => t.state === 'WAITING' || t.state === 'TIMED_WAITING').length,
+                    daemonThreads: this.threads.filter(t => t.isDaemon).length
+                };
+            }
+
+            extractJVMInfo() {
+                const lines = this.threadDump.split('\n');
+                const jvmLine = lines.find(line => line.includes('Full thread dump'));
+                return jvmLine ? jvmLine.replace('Full thread dump ', '') : 'JVM 정보를 찾을 수 없습니다.';
+            }
+
+            updateThreadList() {
+                const threadList = document.getElementById('threadList');
+                threadList.innerHTML = this.threads.map(thread => `
+                    <div class="thread-item" onclick="toggleStackTrace('thread-${thread.tid}')">
+                        <div class="thread-name">${thread.name}</div>
+                        <span class="thread-state state-${thread.state}">${thread.state}</span>
+                        <div class="thread-details">
+                            Priority: ${thread.priority} | TID: ${thread.tid} | NID: ${thread.nid}
+                            ${thread.isDaemon ? ' | Daemon' : ''}
+                        </div>
+                        <div id="thread-${thread.tid}" class="stack-trace">${thread.stackTrace}</div>
+                    </div>
+                `).join('');
+            }
+
+            updateDeadlockAnalysis() {
+                const deadlockResults = document.getElementById('deadlockResults');
+                
+                if (this.deadlocks.length === 0) {
+                    deadlockResults.innerHTML = `
+                        <div style="text-align: center; color: #059669; font-size: 1.1em; padding: 40px;">
+                            ✅ 데드락이 발견되지 않았습니다.
+                        </div>
+                    `;
+                } else {
+                    deadlockResults.innerHTML = this.deadlocks.map(deadlock => `
+                        <div class="deadlock-warning">
+                            <div class="deadlock-title">🚨 ${deadlock.type} 발견</div>
+                            <div><strong>관련 스레드:</strong> ${deadlock.threads.join(', ')}</div>
+                            <div style="margin-top: 15px; background: white; padding: 15px; border-radius: 5px; font-family: monospace; font-size: 0.9em; white-space: pre-wrap;">${deadlock.description}</div>
+                        </div>
+                    `).join('');
+                }
+            }
+
+            updateBlockingAnalysis() {
+                const blockingResults = document.getElementById('blockingResults');
+                const analysis = this.blockingAnalysis;
+                
+                let contentionInfo = '';
+                const lockEntries = Object.entries(analysis.lockContention);
+                
+                if (lockEntries.length > 0) {
+                    // 대기자 수로 내림차순 정렬 (대기자 많은 순서대로)
+                    lockEntries.sort((a, b) => b[1].waiters.length - a[1].waiters.length);
+                    
+                    contentionInfo = `
+                        <div style="margin-top: 20px;">
+                            <h4>Lock Contention 분석 <span style="font-size: 0.9em; color: #666; font-weight: normal;">(대기자 많은 순)</span></h4>
+                            ${lockEntries.map(([lockId, info]) => {
+                                const holderThreads = this.categorizeWebLogicThreads(info.holders);
+                                const waiterThreads = this.categorizeWebLogicThreads(info.waiters);
+                                
+                                return `
+                                <div style="background: white; padding: 15px; margin: 10px 0; border-radius: 8px; border-left: 4px solid #f59e0b;">
+                                    <div style="margin-bottom: 15px;"><strong>Lock ID:</strong> ${lockId}</div>
+                                    
+                                    ${info.holders.length > 0 ? `
+                                        <div style="margin-bottom: 15px;">
+                                            <div style="font-weight: 600; color: #059669; margin-bottom: 8px;">🔒 보유자 (${info.holders.length}개)</div>
+                                            ${this.renderThreadCategories(holderThreads)}
+                                        </div>
+                                    ` : ''}
+                                    
+                                    ${info.waiters.length > 0 ? `
+                                        <div>
+                                            <div style="font-weight: 600; color: #dc2626; margin-bottom: 8px;">⏳ 대기자 (${info.waiters.length}개)</div>
+                                            ${this.renderThreadCategories(waiterThreads)}
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            `;
+                            }).join('')}
+                        </div>
+                    `;
+                }
+
+                blockingResults.innerHTML = `
+                    <div class="stat-grid">
+                        <div class="stat-item">
+                            <div class="stat-number">${analysis.blockedCount}</div>
+                            <div class="stat-label">블로킹된 스레드</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number">${analysis.waitingCount}</div>
+                            <div class="stat-label">대기 중인 스레드</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number">${lockEntries.length}</div>
+                            <div class="stat-label">Lock Contention</div>
+                        </div>
+                    </div>
+                    ${contentionInfo}
+                `;
+            }
+
+            showLoading() {
+                document.getElementById('uploadSection').style.display = 'none';
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('analysisSection').style.display = 'none';
+            }
+
+            hideLoading() {
+                document.getElementById('loading').style.display = 'none';
+            }
+
+            showAnalysis() {
+                this.hideLoading();
+                document.getElementById('uploadSection').style.display = 'none';
+                document.getElementById('analysisSection').style.display = 'block';
+            }
+
+            showError(message) {
+                const errorElement = document.getElementById('errorMessage');
+                errorElement.textContent = message;
+                errorElement.style.display = 'block';
+            }
+
+            hideError() {
+                document.getElementById('errorMessage').style.display = 'none';
+            }
+
+            categorizeWebLogicThreads(threadNames) {
+                const categories = {
+                    STUCK: [],
+                    ACTIVE: [],
+                    OTHER: []
+                };
+
+                threadNames.forEach(name => {
+                    if (name.includes('[STUCK]')) {
+                        categories.STUCK.push(name.replace('[STUCK] ', ''));
+                    } else if (name.includes('[ACTIVE]')) {
+                        categories.ACTIVE.push(name.replace('[ACTIVE] ', ''));
+                    } else {
+                        categories.OTHER.push(name);
+                    }
+                });
+
+                return categories;
+            }
+
+            renderThreadCategories(categories) {
+                let html = '';
+                
+                if (categories.STUCK.length > 0) {
+                    const stuckId = `stuck-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                    html += `
+                        <div style="margin-bottom: 10px;">
+                            <div style="background: #fee2e2; padding: 8px 12px; border-radius: 6px; margin-bottom: 5px; cursor: pointer;" 
+                                 onclick="toggleThreadList('${stuckId}')">
+                                <span style="color: #991b1b; font-weight: 600;">🚨 STUCK 스레드 (${categories.STUCK.length}개)</span>
+                                <span style="float: right; color: #991b1b;">▼</span>
+                            </div>
+                            <div id="${stuckId}" style="display: none; background: #fef2f2; padding: 10px; border-radius: 4px; max-height: 200px; overflow-y: auto;">
+                                ${categories.STUCK.map(thread => `
+                                    <div style="padding: 2px 0; font-size: 0.9em; color: #7f1d1d;">
+                                        • ${thread}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                if (categories.ACTIVE.length > 0) {
+                    const activeId = `active-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                    html += `
+                        <div style="margin-bottom: 10px;">
+                            <div style="background: #d1fae5; padding: 8px 12px; border-radius: 6px; margin-bottom: 5px; cursor: pointer;" 
+                                 onclick="toggleThreadList('${activeId}')">
+                                <span style="color: #065f46; font-weight: 600;">✅ ACTIVE 스레드 (${categories.ACTIVE.length}개)</span>
+                                <span style="float: right; color: #065f46;">▼</span>
+                            </div>
+                            <div id="${activeId}" style="display: none; background: #f0fdf4; padding: 10px; border-radius: 4px; max-height: 200px; overflow-y: auto;">
+                                ${categories.ACTIVE.map(thread => `
+                                    <div style="padding: 2px 0; font-size: 0.9em; color: #14532d;">
+                                        • ${thread}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                if (categories.OTHER.length > 0) {
+                    const otherId = `other-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                    html += `
+                        <div style="margin-bottom: 10px;">
+                            <div style="background: #e0e7ff; padding: 8px 12px; border-radius: 6px; margin-bottom: 5px; cursor: pointer;" 
+                                 onclick="toggleThreadList('${otherId}')">
+                                <span style="color: #3730a3; font-weight: 600;">📋 기타 스레드 (${categories.OTHER.length}개)</span>
+                                <span style="float: right; color: #3730a3;">▼</span>
+                            </div>
+                            <div id="${otherId}" style="display: none; background: #f0f4ff; padding: 10px; border-radius: 4px; max-height: 200px; overflow-y: auto;">
+                                ${categories.OTHER.map(thread => `
+                                    <div style="padding: 2px 0; font-size: 0.9em; color: #312e81;">
+                                        • ${thread}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                return html;
+            }
+        }
+
+        // 전역 함수들
+        function showTab(tabName) {
+            // 모든 탭 비활성화
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            // 선택된 탭 활성화
+            event.target.classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+        }
+
+        function toggleStackTrace(id) {
+            const element = document.getElementById(id);
+            element.style.display = element.style.display === 'block' ? 'none' : 'block';
+        }
+
+        function toggleThreadList(id) {
+            const element = document.getElementById(id);
+            const isVisible = element.style.display === 'block';
+            element.style.display = isVisible ? 'none' : 'block';
+            
+            // 화살표 방향 변경
+            const parent = element.previousElementSibling;
+            const arrow = parent.querySelector('span:last-child');
+            arrow.textContent = isVisible ? '▼' : '▲';
+        }
+
+        // 앱 초기화
+        const analyzer = new ThreadDumpAnalyzer();
+    </script>
+</body>
+</html>
